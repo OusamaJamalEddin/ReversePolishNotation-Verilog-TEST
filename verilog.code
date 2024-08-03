@@ -1,0 +1,99 @@
+module reversePolishNotation (
+    input clk,
+    input rst,
+    input dIn,
+    output dOut
+);
+
+    reg [7:0] stack [0:7];    // stack implementation
+    reg [2:0] stack_ptr = 0;
+
+    reg [9:0] bits_holder; // our 10 bits holder (first 2 from the left hold the key whether the situation is operand or operator)
+    reg [1:0] state; // state to move among the code lines
+
+    reg [7:0] data_holder; // variable to hold the left over bits of the bits_holder to push into the stack
+
+    reg [1:0] operation_code; // we use it as a key to check what kind of operator we are doing
+
+    reg [7:0] output_data; // variable to hold the top stack value when we check the value
+    reg output_validity; // we use it to check if we have an element in the stack or if it's empty
+
+    reg [7:0] dOut_reg;
+    assign dOut = dOut_reg;
+
+    initial begin
+        bits_holder = 0;
+        state = 0; 
+        data_holder = 0;
+        operation_code = 0;
+        output_data = 0;
+        output_validity = 0;
+        dOut_reg = 0;
+    end
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin // try and make it !rst and check as well
+            bits_holder <= 0;
+            state <= 0; 
+            data_holder <= 0;
+            operation_code <= 0;
+            output_data <= 0;
+            output_validity <= 0;
+            dOut_reg <= 0;
+        end else begin
+            bits_holder <= {bits_holder[8:0], dIn}; // passing the bits (dIn) into the bits_holder
+            case (state)
+                2'b00: begin
+                    if (bits_holder[9:8] == 2'b10) begin
+                        state <= 2'b10;
+                    end else if (bits_holder[9:8] == 2'b11) begin
+                        operation_code <= bits_holder[1:0];
+                        state <= 2'b11;
+                    end
+                end
+
+                2'b10: begin
+                    data_holder <= bits_holder[7:0];
+                    stack[stack_ptr] <= data_holder;
+                    stack_ptr <= stack_ptr + 1;
+                    data_holder <= 0;
+                    state <= 2'b00;
+                end
+
+                2'b11: begin
+                    state <= 2'b00;
+                    case (operation_code)
+                        2'b00: begin // CLEAR -> 2'b00
+                            stack_ptr <= 0;
+                        end
+                        2'b01: begin // ADD (+)
+                            if (stack_ptr >= 2) begin
+                                stack[stack_ptr - 2] <= stack[stack_ptr - 2] + stack[stack_ptr - 1];
+                                stack_ptr <= stack_ptr - 1;
+                            end
+                        end
+                        2'b10: begin // MULTIPLY (x)
+                            if (stack_ptr >= 2) begin
+                                stack[stack_ptr - 2] <= stack[stack_ptr - 2] * stack[stack_ptr - 1];
+                                stack_ptr <= stack_ptr - 1;
+                            end
+                        end
+                        2'b11: begin // CHECK TOP VALUE
+                            if (stack_ptr >= 1) begin
+                                output_data <= stack[stack_ptr - 1];
+                                output_validity <= 1;
+                            end
+                        end
+                    endcase
+                end
+            endcase
+        end
+    end
+
+    always @(posedge clk) begin
+        if (output_validity) begin
+            dOut_reg <= output_data;
+            output_validity <= 0;
+        end
+    end
+endmodule
